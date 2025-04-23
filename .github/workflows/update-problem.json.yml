@@ -1,0 +1,43 @@
+name: Update Problem JSON
+
+on:
+  push:
+    paths:
+      - "problem-set-*/assets/**"  # Trigger when an image is added in any problem set folder
+      - "problem-set-*/images/**"  # Trigger when a new folder is created
+
+jobs:
+  update_json:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Identify Latest Problem Set Folder
+        run: |
+          PROBLEM_SET=$(ls -d problem-set-* | tail -n 1)
+          echo "Detected problem set: $PROBLEM_SET"
+          echo "PROBLEM_SET=$PROBLEM_SET" >> $GITHUB_ENV
+
+      - name: Ensure JSON File Exists
+        run: |
+          JSON_FILE="$GITHUB_WORKSPACE/$PROBLEM_SET/problem.json"
+          if [ ! -f "$JSON_FILE" ]; then
+            echo '{"item":[]}' > "$JSON_FILE"
+          fi
+
+      - name: Append New Image to JSON
+        run: |
+          IMAGE_PATH=$(ls "$GITHUB_WORKSPACE/$PROBLEM_SET/assets" | tail -n 1)
+          IMAGE_URL="https://venkatesanrpu.github.io/AI-CHEM-Gateway/$PROBLEM_SET/assets/$IMAGE_PATH"
+          PROBLEM_ID=$(basename "$IMAGE_PATH" .png)
+
+          jq --arg id "$PROBLEM_ID" --arg url "$IMAGE_URL" '.item += [{"problemID": $id, "problemImage": $url, "problemCategory": "Unknown"}]' "$JSON_FILE" > tmp.json && mv tmp.json "$JSON_FILE"
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add "$GITHUB_WORKSPACE/$PROBLEM_SET/problem.json"
+          git commit -m "Updated JSON with new image in $PROBLEM_SET"
+          git push
