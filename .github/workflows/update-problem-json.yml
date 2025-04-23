@@ -110,7 +110,7 @@ jobs:
 
       # Debug: Confirm if image is found
       - name: Debug Image Selection
-        run: echo "Selected image file: $IMAGE_FILENAME"
+        run: echo "Selected image file:$IMAGE_FILENAME"
 
       # Generate image URL and Problem ID
       - name: Generate Image URL and ID
