@@ -29,7 +29,7 @@ jobs:
       - name: Append New Image to JSON
         run: |
           IMAGE_PATH=$(ls "$GITHUB_WORKSPACE/$PROBLEM_SET/assets" | tail -n 1)
-          IMAGE_URL="https://venkatesanrpu.github.io/AI-CHEM-Gateway/$PROBLEM_SET/assets/$IMAGE_PATH"
+          IMAGE_URL="https://venkatesanrpu.github.io/Chem-Exam-Guide/$PROBLEM_SET/assets/$IMAGE_PATH"
           PROBLEM_ID=$(basename "$IMAGE_PATH" .png)
 
           jq --arg id "$PROBLEM_ID" --arg url "$IMAGE_URL" '.item += [{"problemID": $id, "problemImage": $url, "problemCategory": "Unknown"}]' "$JSON_FILE" > tmp.json && mv tmp.json "$JSON_FILE"
