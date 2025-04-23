@@ -1,0 +1,193 @@
+name: Update Problem JSON with Debugging
+
+on:
+  push:
+    paths:
+      # Only trigger on actual image files in assets, ignore directory creation itself
+      - "problem-set-*/assets/**/*.png"
+      - "problem-set-*/assets/**/*.jpg"
+      - "problem-set-*/assets/**/*.jpeg"
+      - "problem-set-*/assets/**/*.gif"
+  workflow_dispatch: # Allows manual execution
+
+jobs:
+  update_json:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4 # Use latest checkout action
+
+      # Debug: List all files in repository
+      - name: Debug Repository Structure
+        run: ls -R $GITHUB_WORKSPACE
+
+      # Identify latest problem set dynamically (assuming latest means highest number or last alphabetically)
+      - name: Identify Latest Problem Set Folder
+        id: set_vars # Give this step an id to easily reference outputs
+        run: |
+          # Find the directory lexicographically last (e.g., problem-set-10 comes after problem-set-9)
+          PROBLEM_SET=$(ls -d $GITHUB_WORKSPACE/problem-set-* | sort -V | tail -n 1)
+          # Check if a directory was found
+          if [ -z "$PROBLEM_SET" ]; then
+            echo "Error: No directory matching 'problem-set-*' found."
+            exit 1
+          fi
+          # Extract just the directory name, not the full path
+          PROBLEM_SET_NAME=$(basename "$PROBLEM_SET")
+          echo "Detected problem set folder: $PROBLEM_SET_NAME"
+          echo "PROBLEM_SET_NAME=$PROBLEM_SET_NAME" >> $GITHUB_ENV
+          echo "PROBLEM_SET_PATH=$PROBLEM_SET" >> $GITHUB_ENV # Store full path too
+
+      # Debug: Confirm detected problem set folder
+      - name: Debug Problem Set Detection
+        run: |
+          echo "Using problem set name: $PROBLEM_SET_NAME"
+          echo "Using problem set path: $PROBLEM_SET_PATH"
+
+      # Ensure JSON file exists and is valid
+      - name: Ensure JSON File Exists and is Valid
+        run: |
+          JSON_FILE="$PROBLEM_SET_PATH/problem.json"
+          echo "Checking JSON file: $JSON_FILE"
+          if [ ! -f "$JSON_FILE" ]; then
+            echo "Creating new JSON file: $JSON_FILE"
+            # Create directory if it doesn't exist (though it should from checkout)
+            mkdir -p "$(dirname "$JSON_FILE")"
+            echo '{"item":[]}' > "$JSON_FILE"
+            echo "JSON file created."
+          else
+            echo "JSON file exists. Validating..."
+            # Validate existing JSON. Exit if invalid.
+            if jq empty "$JSON_FILE"; then
+              echo "Existing JSON is valid."
+            else
+              echo "Error: Existing JSON file ($JSON_FILE) is invalid."
+              echo "Content:"
+              cat "$JSON_FILE"
+              exit 1
+            fi
+          fi
+
+      # Debug: Show JSON file path and initial content (after validation/creation)
+      - name: Debug JSON File State
+        run: |
+          JSON_FILE="$PROBLEM_SET_PATH/problem.json"
+          echo "JSON File Path: $JSON_FILE"
+          echo "--- JSON Content Before Update ---"
+          cat "$JSON_FILE"
+          echo "---------------------------------"
+
+      # Identify latest image uploaded in assets folder (using modification time)
+      # NOTE: This still assumes the trigger is related to the *latest* file.
+      # A more robust solution might parse the push event data if needed.
+      - name: Identify Latest Image File
+        id: image_info
+        run: |
+          ASSETS_DIR="$PROBLEM_SET_PATH/assets"
+          echo "Looking for images in: $ASSETS_DIR"
+          if [ ! -d "$ASSETS_DIR" ]; then
+            echo "Error: Assets directory '$ASSETS_DIR' does not exist."
+            exit 1
+          fi
+          # Find the most recently modified file in the assets directory
+          # Using -printf '%T@ %p\n' prints modification time (seconds since epoch) and path
+          # sort -n sorts numerically (by time), tail -n 1 gets the latest
+          # cut removes the timestamp part
+          LATEST_IMAGE_FULL_PATH=$(find "$ASSETS_DIR" -maxdepth 1 -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" \) -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)
+
+          if [ -z "$LATEST_IMAGE_FULL_PATH" ]; then
+            echo "No image files found in $ASSETS_DIR"
+            # Decide if this is an error or just nothing to do
+            # For this workflow, it's likely an error if triggered but no image found
+            exit 1
+          fi
+
+          IMAGE_FILENAME=$(basename "$LATEST_IMAGE_FULL_PATH")
+          echo "Detected latest image filename: $IMAGE_FILENAME"
+          echo "IMAGE_FILENAME=$IMAGE_FILENAME" >> $GITHUB_ENV
+          # Output for use in later steps if needed via steps.image_info.outputs.image_filename
+          echo "image_filename=$IMAGE_FILENAME" >> $GITHUB_OUTPUT
+
+      # Debug: Confirm if image is found
+      - name: Debug Image Selection
+        run: echo "Selected image file: $IMAGE_FILENAME"
+
+      # Generate image URL and Problem ID
+      - name: Generate Image URL and ID
+        run: |
+          # Ensure IMAGE_FILENAME is set
+          if [ -z "$IMAGE_FILENAME" ]; then
+            echo "Error: IMAGE_FILENAME environment variable is not set."
+            exit 1
+          fi
+          # Construct URL (adjust user/repo if needed)
+          # GITHUB_REPOSITORY is owner/repo format (e.g., venkatesanrpu/Chem-Exam-Guide)
+          REPO_NAME=$(echo "$GITHUB_REPOSITORY" | cut -d'/' -f2)
+          IMAGE_URL="https://venkatesanrpu.github.io/$REPO_NAME/$PROBLEM_SET_NAME/assets/$IMAGE_FILENAME"
+          # Extract base name without extension for ID
+          PROBLEM_ID=$(basename "$IMAGE_FILENAME" .png | basename -s .jpg | basename -s .jpeg | basename -s .gif)
+
+          echo "IMAGE_URL=$IMAGE_URL" >> $GITHUB_ENV
+          echo "PROBLEM_ID=$PROBLEM_ID" >> $GITHUB_ENV
+
+      # Debug: Confirm generated image URL and ID
+      - name: Debug Generated Info
+        run: |
+          echo "Final Image URL: $IMAGE_URL"
+          echo "Final Problem ID: $PROBLEM_ID"
+          # Check if variables are empty before jq
+          if [ -z "$PROBLEM_ID" ] || [ -z "$IMAGE_URL" ]; then
+             echo "Error: PROBLEM_ID or IMAGE_URL is empty. Cannot proceed."
+             exit 1
+          fi
+
+      # Append new image details to JSON file
+      - name: Append Image Data to JSON
+        run: |
+          JSON_FILE="$PROBLEM_SET_PATH/problem.json"
+          echo "Attempting to update JSON file: $JSON_FILE"
+          echo "Using PROBLEM_ID: $PROBLEM_ID"
+          echo "Using IMAGE_URL: $IMAGE_URL"
+
+          # Use temporary file for safety
+          TMP_JSON=$(mktemp)
+
+          # Run jq, capturing stderr and checking exit code
+          if ! jq --arg id "$PROBLEM_ID" --arg url "$IMAGE_URL" \
+               '.item += [{"problemID": $id, "problemImage": $url, "problemCategory": "Unknown"}]' \
+               "$JSON_FILE" > "$TMP_JSON" 2> jq_error.log; then
+             echo "Error: jq command failed. Exit code: $?"
+             echo "jq stderr:"
+             cat jq_error.log
+             echo "Input JSON was:"
+             cat "$JSON_FILE"
+             exit 1
+          fi
+
+          # If jq succeeded, move the temporary file over the original
+          mv "$TMP_JSON" "$JSON_FILE"
+          echo "JSON file successfully updated."
+
+      # Debug: Show final JSON content
+      - name: Debug Final JSON Content
+        run: |
+          echo "--- Final JSON Content ---"
+          cat "$PROBLEM_SET_PATH/problem.json"
+          echo "--------------------------"
+
+      # Commit and push changes
+      - name: Commit and Push Updated JSON
+        run: |
+          JSON_FILE_REL_PATH="$PROBLEM_SET_NAME/problem.json" # Relative path for git add
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # Check if there are changes to commit
+          if git diff --quiet "$JSON_FILE_REL_PATH"; then
+            echo "No changes detected in $JSON_FILE_REL_PATH. Nothing to commit."
+          else
+            echo "Changes detected. Committing..."
+            git add "$JSON_FILE_REL_PATH"
+            git commit -m "chore: Update JSON for new image in $PROBLEM_SET_NAME" -m "Added problemID: $PROBLEM_ID"
+            git push
+            echo "Changes pushed."
+          fi
