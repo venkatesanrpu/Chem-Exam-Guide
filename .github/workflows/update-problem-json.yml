@@ -19,10 +19,10 @@ jobs:
           echo "Detected problem set: $PROBLEM_SET"
           echo "PROBLEM_SET=$PROBLEM_SET" >> $GITHUB_ENV
       
-	  - name: Debug File Paths
+      - name: Debug File Paths
         run: ls -R $GITHUB_WORKSPACE
-              
-	  - name: Ensure JSON File Exists
+      
+      - name: Ensure JSON File Exists
         run: |
           JSON_FILE="$GITHUB_WORKSPACE/$PROBLEM_SET/problem.json"
           if [ ! -f "$JSON_FILE" ]; then
