@@ -5,6 +5,7 @@ on:
     paths:
       - "problem-set-*/assets/**"  # Trigger when an image is added in any problem set folder
       - "problem-set-*/images/**"  # Trigger when a new folder is created
+  workflow_dispatch: # Adds manual trigger
 
 jobs:
   update_json:
