@@ -5,8 +5,7 @@ on:
     paths:
       - "problem-set-*/assets/**"  # Trigger when an image is added in any problem set folder
       - "problem-set-*/images/**"  # Trigger when a new folder is created
-  workflow_dispatch: # Adds manual trigger
-
+  workflow_dispatch: # Adds manual run
 jobs:
   update_json:
     runs-on: ubuntu-latest
@@ -19,8 +18,11 @@ jobs:
           PROBLEM_SET=$(ls -d problem-set-* | tail -n 1)
           echo "Detected problem set: $PROBLEM_SET"
           echo "PROBLEM_SET=$PROBLEM_SET" >> $GITHUB_ENV
-
-      - name: Ensure JSON File Exists
+      
+	  - name: Debug File Paths
+        run: ls -R $GITHUB_WORKSPACE
+              
+	  - name: Ensure JSON File Exists
         run: |
           JSON_FILE="$GITHUB_WORKSPACE/$PROBLEM_SET/problem.json"
           if [ ! -f "$JSON_FILE" ]; then
