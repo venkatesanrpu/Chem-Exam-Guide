@@ -1,0 +1,82 @@
+name: Update Problem JSON Files
+
+on:
+  push:
+    paths:
+      - '**/images/**/*.png'
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  update-json:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+      run: |
+        echo "DEBUG: Checked out repository"
+        git log -1 --oneline
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+      run: |
+        echo "DEBUG: Python version"
+        python --version
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyyaml
+        echo "DEBUG: Installed Python dependencies"
+        pip list
+
+    - name: Find changed PNG files
+      id: find-files
+      run: |
+        echo "DEBUG: Determining trigger type"
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "DEBUG: Manual trigger - finding all PNG files"
+          changed_files=$(find . -type f -path '**/images/**/*.png' || true)
+        else
+          echo "DEBUG: Push trigger - finding changed PNG files"
+          changed_files=$(git diff --name-only HEAD^ HEAD | grep '\.png$' | grep '/images/' || true)
+        fi
+        echo "Changed files:"
+        echo "$changed_files"
+        echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+        echo "$changed_files" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Update JSON files
+      run: |
+        python .github/scripts/update_problem_json.py
+      env:
+        CHANGED_FILES: ${{ steps.find-files.outputs.changed_files }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      working-directory: ./
+      continue-on-error: false
+
+    - name: Debug JSON files
+      run: |
+        echo "DEBUG: Showing updated JSON files"
+        find . -name 'problem.json' -exec echo "Found JSON: {}" \;
+        find . -name 'problem.json' -exec cat {} \;
+
+    - name: Commit changes
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add **/problem.json
+        git status
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Update problem.json files with new image data"
+          git push
+          echo "DEBUG: Committed and pushed changes"
+          git log -1 --oneline
+        fi
