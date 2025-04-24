@@ -41,7 +41,7 @@ def process_image_file(image_path, github_repo):
     repo_owner = github_repo.split('/')[0]
     
     # Include 'images' in the URL path
-    question_url = f"https://{repo_owner}.github.io/{github_repo.split('/')[1]}/{problem_folder}/images/{level}/{image_name}"
+    question_url = f"https://venkatesanrpu.github.io/Chem-Exam-Guide/{problem_folder}/images/{level}/{image_name}"
     
     entry = {
         "question_url": question_url,
