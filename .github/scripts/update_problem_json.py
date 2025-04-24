@@ -39,7 +39,7 @@ def process_image_file(image_path, github_repo):
     
     # Extract repository owner from github_repo (format: owner/repo)
     repo_owner = github_repo.split('/')[0]
-    
+        print(f"REPO OWNER: {repo_owner}")
     # Include 'images' in the URL path
     question_url = f"https://venkatesanrpu.github.io/Chem-Exam-Guide/{problem_folder}/images/{level}/{image_name}"
     
