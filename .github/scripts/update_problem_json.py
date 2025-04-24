@@ -37,7 +37,11 @@ def process_image_file(image_path, github_repo):
     level = path_parts[-2]
     image_name = path_parts[-1]
     
-    question_url = f"https://{github_repo}.github.io/{problem_folder}/{level}/{image_name}"
+    # Extract repository owner from github_repo (format: owner/repo)
+    repo_owner = github_repo.split('/')[0]
+    
+    # Include 'images' in the URL path
+    question_url = f"https://{repo_owner}.github.io/{github_repo.split('/')[1]}/{problem_folder}/images/{level}/{image_name}"
     
     entry = {
         "question_url": question_url,
