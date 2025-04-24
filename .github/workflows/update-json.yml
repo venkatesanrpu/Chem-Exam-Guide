@@ -3,7 +3,7 @@ name: Update Problem JSON Files
 on:
   push:
     paths:
-      - '**/images/**/*.png'
+      - '**/images/**/*.{png,gif,jpg,svg}'
   workflow_dispatch: # Manual trigger
 
 jobs:
@@ -26,7 +26,7 @@ jobs:
       with:
         python-version: '3.x'
 
-    - name: Debug Python Version
+    - name: Debug Python setup
       run: |
         echo "DEBUG: Python version"
         python --version
@@ -38,16 +38,23 @@ jobs:
         echo "DEBUG: Installed Python dependencies"
         pip list
 
-    - name: Find changed PNG files
+    - name: Debug directory contents
+      run: |
+        echo "DEBUG: Listing repository contents"
+        ls -R
+        echo "DEBUG: Checking for Python script"
+        ls -l .github/scripts/ || echo "Directory .github/scripts/ not found"
+
+    - name: Find changed image files
       id: find-files
       run: |
         echo "DEBUG: Determining trigger type"
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          echo "DEBUG: Manual trigger - finding all PNG files"
-          changed_files=$(find . -type f -path '**/images/**/*.png' || true)
+          echo "DEBUG: Manual trigger - finding all image files"
+          changed_files=$(find . -type f -path '**/images/**/*' -regex '.*\.\(png\|gif\|jpg\|svg\)' || true)
         else
-          echo "DEBUG: Push trigger - finding changed PNG files"
-          changed_files=$(git diff --name-only HEAD^ HEAD | grep '\.png$' | grep '/images/' || true)
+          echo "DEBUG: Push trigger - finding changed image files"
+          changed_files=$(git diff --name-only HEAD^ HEAD | grep -E '\.(png|gif|jpg|svg)$' | grep '/images/' || true)
         fi
         echo "Changed files:"
         echo "$changed_files"
@@ -67,19 +74,19 @@ jobs:
     - name: Debug JSON files
       run: |
         echo "DEBUG: Showing updated JSON files"
-        find . -name 'problem.json' -exec echo "Found JSON: {}" \;
-        find . -name 'problem.json' -exec cat {} \;
+        find . -name '*.json' -exec echo "Found JSON: {}" \;
+        find . -name '*.json' -exec cat {} \;
 
     - name: Commit changes
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
-        git add **/problem.json
+        git add problem-set-*/**.json
         git status
         if git diff --staged --quiet; then
           echo "No changes to commit"
         else
-          git commit -m "Update problem.json files with new image data"
+          git commit -m "Update dynamic JSON files with new image data"
           git push
           echo "DEBUG: Committed and pushed changes"
           git log -1 --oneline
